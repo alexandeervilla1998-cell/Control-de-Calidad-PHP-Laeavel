@@ -3,167 +3,93 @@
 namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
-use App\Models\Product;
+use App\Http\Requests\StoreProductRequest;
+use App\Http\Requests\UpdateProductRequest;
 use App\Models\ProductionLine;
+use App\Services\ProductService;
 use Exception;
-use Illuminate\Http\Request;
 
 class ProductController extends Controller
 {
-    public function index()
+    protected $productService;
+
+    public function __construct(ProductService $productService)
     {
-        $products = Product::all();
-        return view('product.index', compact('products'));
+        $this->productService = $productService;
     }
 
+    /**
+     * Mostrar listado de productos.
+     */
+    public function index()
+    {
+        try {
+            $products = $this->productService->getAllPaginated(15);
+            return view('product.index', compact('products'));
+        } catch (Exception $e) {
+            return redirect()->back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Mostrar formulario de creación.
+     */
     public function create()
     {
         $productionLines = ProductionLine::all();
         return view('product.create', compact('productionLines'));
     }
 
-    public function store(Request $request)
+    /**
+     * Guardar nuevo producto.
+     */
+    public function store(StoreProductRequest $request)
     {
         try {
-            // validamos los datos recibidos del formulario
-            $validatedData = $request->validate([
-                'isactive' => 'required|string|max:1',
-                'name' => 'required|string|max:100',
-                'code' => 'required|string|max:100',
-                'picture' => 'nullable|string|max:500',
-                'production_line_id' => 'required|integer|exists:production_line,production_line_id',
-            ]);
-
-            // seteamos los datos para crear un nuevo producto
-            $data = new Product();
-            $data->created = now();
-            $data->createdby = 0;
-            $data->updated = now();
-            $data->updatedby = 0;
-            $data->isactive = $validatedData['isactive'];
-            $data->name = $validatedData['name'];
-            $data->code = $validatedData['code'];
-            $data->picture = $validatedData['picture'] ?? null;
-            $data->production_line_id = $validatedData['production_line_id'];
-
-            // creamos un nuevo registro en la base de datos
-            $isOK = $data->save();
-
-            if ($isOK) {
-                // redirigimos con un mensaje de éxito
-                return redirect()->route('product.index')->with('success', 'Registro creado exitosamente.');
-            } else {
-                return redirect()->back()
-                ->withInput() // Envía los datos del formulario de vuelta
-                ->with('error', 'Error al crear el registro.');
-            }
-        } catch (Exception $ex) {
-            return redirect()->back()
-            ->withInput()
-            ->with('error', 'Error grave al crear el registro.');
+            $this->productService->create($request->validated());
+            return redirect()->route('product.index')->with('success', 'Producto creado exitosamente.');
+        } catch (Exception $e) {
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
     }
 
-    public function show(string $id)
-    {
-        //
-    }
-
+    /**
+     * Mostrar formulario de edición.
+     */
     public function edit(string $id)
     {
         try {
-            // buscamos el registro por su id
-            $product = Product::find($id);
-
-            // obtenemos el listado de lineas de produccion
+            $product = $this->productService->getById($id);
             $productionLines = ProductionLine::all();
-
-            if ($product == null || $productionLines == null) {
-                // si no se encuentra el registro, redirigimos con un mensaje de error
-                return redirect()->route('product.index')->with('error', 'Registro no encontrado.');
-            }
-
-            // retornamos la vista con los datos del registro encontrado
-            return view('product.edit', compact('product', 'productionLines'));            
-        } catch (Exception $ex) {
-            return redirect()->back()
-            ->withInput()
-            ->with('error', 'Error grave al buscar el registro.');
+            return view('product.edit', compact('product', 'productionLines'));
+        } catch (Exception $e) {
+            return redirect()->route('product.index')->with('error', $e->getMessage());
         }
     }
 
-    public function update(Request $request, string $id)
+    /**
+     * Actualizar producto.
+     */
+    public function update(UpdateProductRequest $request, string $id)
     {
         try {
-            // validamos los datos recibidos del formulario
-            $validatedData = $request->validate([
-                'isactive' => 'required|string|max:1',
-                'name' => 'required|string|max:100',
-                'code' => 'required|string|max:100',
-                'picture' => 'nullable|string|max:500',
-                'production_line_id' => 'required|integer|exists:production_line,production_line_id',
-            ]);
-
-            // buscamos el registro por su id
-            $product = Product::find($id);
-
-            // validacion extra por si el registro lo ha eliminado otro usuario mientras se editaba
-            if ($product == null) {
-                // si no se encuentra el registro, redirigimos con un mensaje de error
-                return redirect()->route('product.index')->with('error', 'Registro no encontrado.');
-            }
-
-            // actualizamos los campos del registro con los datos validados
-            $product->updated = now();
-            $product->updatedby = 0;
-            $product->isactive = $validatedData['isactive'];
-            $product->name = $validatedData['name'];
-            $product->code = $validatedData['code'];
-            $product->picture = $validatedData['picture'] ?? null;
-            $product->production_line_id = $validatedData['production_line_id'];
-
-            // guardamos los cambios en la base de datos
-            $isOK = $product->save();
-
-            if ($isOK) {
-                // redirigimos al usuario con un mensaje de éxito
-                return redirect()->route('product.index')->with('success', 'Registro actualizado exitosamente.');
-            } else {
-                return redirect()->back()
-                ->withInput() // Envía los datos del formulario de vuelta
-                ->with('error', 'Error al actualizar el registro.');
-            }
-        } catch (Exception $ex) {
-            return redirect()->back()
-            ->withInput()
-            ->with('error', 'Error grave al actualizar el registro.');
+            $this->productService->update($id, $request->validated());
+            return redirect()->route('product.index')->with('success', 'Producto actualizado exitosamente.');
+        } catch (Exception $e) {
+            return redirect()->back()->withInput()->with('error', $e->getMessage());
         }
     }
 
+    /**
+     * Eliminar producto.
+     */
     public function destroy(string $id)
     {
         try {
-            // buscamos el registro por su id
-            $product = Product::find($id);
-
-            if ($product == null) {
-                // si no se encuentra el registro, redirigimos con un mensaje de error
-                return redirect()->route('product.index')->with('error', 'Registro no encontrado.');
-            }
-
-            // eliminamos el registro de la base de datos
-            $isOK = $product->delete();
-
-            if ($isOK) {
-                // redirigimos al usuario con un mensaje de éxito
-                return redirect()->route('product.index')->with('success', 'Registro eliminado exitosamente.');
-            } else {
-                return redirect()->back()
-                ->with('error', 'Error al eliminar el registro.');
-            }
-        } catch (Exception $ex) {
-            return redirect()->back()
-            ->with('error', 'Error grave al eliminar el registro.');
+            $this->productService->delete($id);
+            return redirect()->route('product.index')->with('success', 'Producto eliminado exitosamente.');
+        } catch (Exception $e) {
+            return redirect()->back()->with('error', $e->getMessage());
         }
     }
 }

@@ -134,6 +134,9 @@
 
     <!-- Contenido Principal -->
     <main class="max-w-7xl mx-auto py-10 px-4 sm:px-6 lg:px-8 flex-grow w-full">
+        <!-- Componente de Alertas -->
+        @include('components.alerts')
+        
         <div class="bg-white overflow-hidden shadow-xl sm:rounded-lg p-6">
             @yield('content')
         </div>
